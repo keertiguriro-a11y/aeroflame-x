@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AeroFlame-X: Advanced Microgravity Fire Safety & Hazard Matrix</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{color-scheme:dark;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{font-family:Barlow,system-ui,sans-serif;background:#020617 radial-gradient(circle at 85% -10%,#0e3a4a55,transparent 45%) no-repeat}
+.dsp{font-family:'Barlow Condensed','Arial Narrow',sans-serif;letter-spacing:.02em}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+button:focus-visible,input:focus-visible{outline:2px solid #22d3ee;outline-offset:2px}
+.opt[aria-pressed=true]{border-color:#22d3ee;background:#0c2a38;box-shadow:inset 3px 0 0 #22d3ee}
+.bar>i{display:block;height:100%;transition:width .5s,background .5s}
+#sheet{display:none}
+body.pres{font-size:1.2em}html:has(body.pres){font-size:125%}
+.out h4{color:#22d3ee;font-family:'Barlow Condensed',sans-serif;font-size:1.15em;margin:.9em 0 .2em}
+.out h4:first-child{margin-top:0}.out li{margin:.2em 0}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media print{body{background:#fff!important;color:#000!important}body>*:not(#sheet){display:none!important}#sheet{display:block!important;font:12px/1.5 Arial,sans-serif}#sheet h1{font-size:20px}#sheet h2{font-size:14px;border-bottom:1px solid #888;margin:12px 0 4px}#sheet td,#sheet th{border:1px solid #aaa;padding:3px 7px;text-align:left}#sheet table{border-collapse:collapse;width:100%}}
+</style></head>
+<body class="bg-slate-950 text-slate-200 min-h-screen">
+<div class="max-w-[1500px] mx-auto px-4 sm:px-7 pb-12">
+<header class="flex flex-wrap items-center justify-between gap-3 py-5">
+ <div><h1 class="dsp text-3xl sm:text-4xl font-bold text-white">Aero<span class="text-amber-400">Flame-X</span> <span class="text-slate-400 font-semibold text-2xl">Hazard Matrix</span></h1>
+ <p class="text-sm text-slate-400 max-w-xl">Decision-support tool for NASA Physical Sciences Informatics (PSI) microgravity combustion data: ISS hardware context, Artemis atmospheres and a ventilation and cool-flame hazard model. Flame in Freefall, Space Apps 2026.</p></div>
+ <div class="flex gap-2 flex-wrap"><button id="pm" class="border border-slate-700 hover:border-cyan-400 hover:text-cyan-300 rounded px-4 py-2">Presentation mode</button><button id="ex" class="border border-amber-400 text-amber-300 hover:bg-amber-400 hover:text-slate-900 rounded px-4 py-2">Export PDF report</button></div>
+</header>
+
+<section aria-label="Live telemetry" class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4" id="tele"></section>
+
+<div class="grid lg:grid-cols-[310px_1fr] gap-4">
+ <section class="bg-[#0b1224] border border-slate-800 rounded-xl p-4 h-fit">
+  <h2 class="dsp text-xl text-white mb-3">Scenario inputs</h2>
+  <div id="cg" class="mb-4"></div><div id="cf" class="mb-4"></div><div id="ca" class="mb-2"></div><p id="an" class="text-xs text-amber-200/90 border border-amber-400/30 rounded p-2 mb-4"></p>
+  <label class="block text-cyan-300 text-sm font-semibold mb-1" for="vv">Forced ventilation: <span id="vl" class="mono"></span> cm/s</label>
+  <input id="vv" type="range" min="0" max="30" value="10" class="w-full accent-cyan-400">
+  <p class="text-xs text-slate-500 mt-3">Model-based educational estimates, not flight-certified values. Assumptions are listed in the exported memo.</p>
+ </section>
+
+ <section class="space-y-4 min-w-0">
+  <div class="bg-[#0b1224] border border-slate-800 rounded-xl p-4">
+   <div class="flex flex-wrap items-center gap-6">
+    <div class="relative w-36 h-36 shrink-0"><svg width="144" height="144" class="-rotate-90"><circle cx="72" cy="72" r="62" fill="none" stroke="#16213a" stroke-width="11"/><circle id="rc" cx="72" cy="72" r="62" fill="none" stroke="#22d3ee" stroke-width="11" stroke-linecap="round" stroke-dasharray="390" stroke-dashoffset="390" style="transition:all .6s"/></svg>
+     <div class="absolute inset-0 grid place-content-center text-center"><b id="hi" class="dsp text-4xl text-white leading-none">0%</b><span class="text-xs text-slate-400">Ignition Hazard Index</span></div></div>
+    <div class="flex-1 min-w-[240px]"><div id="lv" class="dsp text-4xl font-bold"></div><p id="lt" class="text-sm text-slate-400 mb-3"></p>
+     <div class="grid sm:grid-cols-2 gap-3" id="mt"></div></div>
+   </div>
+   <div class="mt-4 border-t border-slate-800 pt-3">
+    <div class="flex flex-wrap items-center gap-3"><button id="sim" class="bg-red-500/90 hover:bg-red-400 text-white rounded px-4 py-2 font-semibold">Simulate ignition event</button>
+    <div class="flex-1 min-w-[220px]"><div class="flex justify-between text-xs mono text-slate-400"><span>Smoke transit to detector (time-compressed)</span><span id="se">0 ms</span></div><div class="bar h-2 bg-slate-800 rounded mt-1"><i id="sb" class="bg-amber-400 rounded" style="width:0"></i></div></div></div>
+   </div>
+  </div>
+
+  <div id="cfw" class="bg-[#0b1224] border-2 border-slate-700 rounded-xl p-4" role="alert"></div>
+  <div class="bg-[#0b1224] border border-slate-800 rounded-xl p-4"><h2 class="dsp text-xl text-white mb-2">Ventilation paradox: spread vs detection</h2><div class="flex flex-wrap gap-4 items-center"><div id="vpc" class="flex-1 min-w-[260px]"></div><div class="flex-1 min-w-[240px] text-sm text-slate-300"><div id="vpt"></div><div class="text-xs mt-2 mono"><span class="text-rose-400">red</span> spread, <span class="text-cyan-300">cyan</span> detection lag, <span class="text-amber-300">amber</span> current, <span class="text-green-400">green</span> balanced</div></div></div></div>
+  <div class="grid md:grid-cols-2 gap-4">
+   <div class="bg-[#0b1224] border border-slate-800 rounded-xl p-4"><h2 class="dsp text-xl text-white mb-2">NASA partial-gravity reality</h2><p class="text-sm text-slate-300">While NASA targets Artemis lunar bases (0.16g) and Martian habitats (0.38g), direct partial-gravity combustion data is limited in the PSI database. Researchers bridge this gap using 0g/1g bounding and electric-field (ACME E-FIELD) ion dynamics.</p><p class="text-xs text-slate-400 mt-2">How this app handles it: 0.16 g and 0.38 g results interpolate between 0 g and 1 g behavior (buoyant flow scaled with the square root of g) and carry lower confidence than the 0 g cases.</p></div>
+   <div class="bg-[#0b1224] border border-slate-800 rounded-xl p-4"><h2 class="dsp text-xl text-white mb-2">ISS hardware map</h2><ul class="text-sm text-slate-300 space-y-1.5"><li><b class="text-amber-300">FLEX / FLEX-2 / CFI</b>: Multi-user Droplet Combustion Apparatus (MDCA) in the Combustion Integrated Rack (CIR).</li><li><b class="text-amber-300">BASS / BASS-II / SPICE</b>: Microgravity Science Glovebox (MSG) with fan-driven flow ducts.</li><li><b class="text-amber-300">Saffire-I to VI</b>: uncrewed Cygnus vehicle, large-scale burns.</li><li><b class="text-amber-300">ACME E-FIELD</b>: electric-field flame control studies in the CIR.</li></ul><p id="hwf" class="text-xs text-cyan-200 mt-2 border-t border-slate-800 pt-2"></p></div>
+  </div>
+  <div class="bg-[#0b1224] border border-slate-800 rounded-xl p-4">
+   <div class="flex flex-wrap items-center justify-between gap-2 mb-3"><h2 class="dsp text-xl text-white">NASA microgravity combustion library <span id="dn" class="text-sm text-slate-500"></span></h2>
+   <div class="flex flex-wrap gap-2" id="pf"></div></div>
+   <div id="dg" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-3"></div>
+  </div>
+
+  <div class="bg-[#0b1224] border border-slate-800 rounded-xl p-4">
+   <h2 class="dsp text-xl text-white mb-2">SI hazard analysis terminal</h2>
+   <div id="out" class="out mono text-[13px] leading-relaxed bg-[#030814] border border-slate-800 rounded-lg p-4 min-h-[240px] max-h-[540px] overflow-auto" aria-live="polite"><span class="text-slate-500">Ready. Set the scenario, run an analysis, or ask a question. Mentioning gravity, fuel, atmosphere, "Novec", "CO2" or "ventilation" in your question updates the scenario.</span></div>
+   <div class="flex flex-wrap gap-2 mt-3"><button id="run" class="bg-cyan-400 text-slate-900 font-semibold rounded px-4 py-2 hover:bg-cyan-300">Run AI hazard analysis</button>
+   <input id="qi" aria-label="Safety question" placeholder="Ask a safety question…" class="flex-1 min-w-[220px] bg-[#0a1020] border border-slate-700 rounded px-3 py-2"><button id="qs" class="border border-slate-700 hover:border-cyan-400 rounded px-4 py-2">Ask</button></div>
+   <div id="ch" class="flex flex-wrap gap-2 mt-2"></div>
+   <p class="text-xs text-slate-500 mt-2">The engine runs entirely in the page using the model above, so it answers instantly offline. Agent and threshold guidance is an educational synthesis; verify against NASA flight rules.</p>
+  </div>
+ </section>
+</div>
+</div>
+
+<div id="md" class="hidden fixed inset-0 z-50 bg-black/70 p-4 overflow-auto" role="dialog" aria-modal="true" aria-label="Finding details"><div class="max-w-2xl mx-auto mt-10 bg-[#0b1224] border border-cyan-500/40 rounded-xl p-6" id="mb"></div></div>
+<div id="sheet"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const GR=[{v:0,t:'ISS microgravity',s:'0 g'},{v:.16,t:'Lunar habitat',s:'0.16 g'},{v:.38,t:'Martian habitat',s:'0.38 g'}];
+const FU={wire:{t:'Avionics copper wiring',s:'Insulated cable, electrical faults',loi:26,m:.8},poly:{t:'Polymer wall panels',s:'Cabin plastics',loi:24,m:1},fab:{t:'Nomex spacesuit fabric',s:'Thin textile sheets',loi:29,m:1.15},li:{t:'Lithium-ion battery cells',s:'Thermal runaway',loi:null,m:1.6}};
+const AT=[{t:'Standard air',s:'21% O\u2082 at 101.3 kPa',o:21,p:101.3},{t:'Artemis Moon base / pressurized rover',s:'30% O\u2082 at 10.2 psi (70.3 kPa)',o:30,p:70.3},{t:'High-pressure hab',s:'35% O\u2082 at 101.3 kPa',o:35,p:101.3}];
+const S={g:0,f:'wire',a:0,v:10};
+function calc(x){const s={...S,...x},A=AT[s.a],F=FU[s.f];
+ const eff=A.o*(.7+.3*A.p/101.3),shift=3.5*(1-Math.min(s.g,.38)/.38);
+ let hi=F.loi===null?52+1.6*(eff-21)+shift:100/(1+Math.exp(-(eff-(F.loi-shift))/2.2));
+ hi=Math.max(1,Math.min(99,hi));
+ const ub=30*Math.sqrt(s.g),u=Math.max(1,Math.hypot(ub,s.v)),q=u/(u+2),qr=30/32;
+ const sp=Math.pow(eff/21,2.2)*Math.sqrt(u/30)*(q/qr)*F.m;
+ const us=Math.hypot(.15*Math.sqrt(s.g),s.v/100,.02),lag=Math.round(1.5/us*1000)+800;
+ const lv=hi<35?'LOW':hi<65?'MODERATE':'CRITICAL';
+ const cg=s.g===0?1:s.g<.2?.6:.35,cf=Math.round(90*Math.min(1,cg*({wire:.7,poly:1,fab:.5,li:.8}[s.f])*(1+.3*(1-s.v/30))/1.3)),pyro=Math.round(Math.min(100,.55*hi+35*(1-s.v/30)*(s.g===0?1:.6))),hold=Math.round(5+25*cf/100);
+ return{hi,sp,lag,lv,eff,u,A,F,cf,pyro,hold}}
+function sweep(){const a=[];for(let v=0;v<=30;v++){const c=calc({v});a.push({v,sp:c.sp,lag:c.lag})}return a}
+function bal(){const a=sweep(),ms=Math.max(...a.map(x=>x.sp)),ml=Math.max(...a.map(x=>x.lag));return a.reduce((b,x)=>{const k=x.sp/ms+x.lag/ml;return k<b.k?{v:x.v,k}:b},{v:0,k:9})}
+const EV={wire:'Evidence for wiring: closest data are SAME smoke runs and Saffire-I to VI on Cygnus; electrical-fault ignition itself is mostly ground-tested. Confidence: low to medium.',poly:'Evidence for polymers: BASS / BASS-II and SPICE solid-fuel tests in the MSG flow duct plus Saffire burns. Confidence: medium at 0 g, low at partial gravity.',fab:'Evidence for fabrics: BASS / BASS-II fabric flame spread in the MSG and Saffire meter-scale fabric burns. Confidence: medium at 0 g, low at partial gravity.',li:'Evidence for Li-ion: no dedicated ISS combustion experiment; treat as extrapolation from thermal-runaway engineering work, with FLEX / CFI cool-flame insight for vented vapors. Confidence: low.'};
+const ANOTE=['Earth reference: 21% O\u2082 at 101.3 kPa.','Artemis Moon base / rover: about 30% O\u2082 at 10.2 psi is roughly 40% more oxygen than Earth air. Oxygen partial pressure stays near Earth levels, but the higher fraction still narrows limiting-oxygen margins for polymers, Nomex and avionics insulation, so Earth-air flammability ratings are not conservative.','Scenario atmosphere: 35% O\u2082 at 101.3 kPa, a severe enrichment case for bounding studies.'];
+function extra(r){const lc=r.cf<35?'#4ade80':r.cf<65?'#fbbf24':'#f43f5e',ll=r.cf<35?'LOW':r.cf<65?'ELEVATED':'HIGH';
+ $('cfw').style.borderColor=lc;$('an').textContent=ANOTE[S.a];$('hwf').textContent=EV[S.f];
+ $('cfw').innerHTML='<div class="dsp text-2xl font-bold" style="color:'+lc+'">COOL FLAME &amp; PYROLYSIS WARNING: '+ll+' ('+r.cf+'%)</div><p class="text-sm text-slate-300 mt-1">FLEX and the Cool Flames Investigation (MDCA in the CIR) showed fuels can keep burning in a faint, low-temperature mode after the visible flame disappears. Pyrolysis gas load index: <b class="mono">'+r.pyro+'%</b>. Do not declare an all-clear by sight: hold and monitor temperature and CO for at least <b class="mono">'+r.hold+' min</b> (model recommendation).</p>';
+ const a=sweep(),ms=Math.max(...a.map(x=>x.sp)),ml=Math.max(...a.map(x=>x.lag)),X=v=>20+v/30*260,pl=(k,m,c)=>'<polyline fill="none" stroke="'+c+'" stroke-width="2" points="'+a.map(x=>X(x.v)+','+(105-x[k]/m*90)).join(' ')+'"/>',b=bal(),z=calc({v:0});
+ $('vpc').innerHTML='<svg viewBox="0 0 300 125" class="w-full max-w-md"><line x1="20" y1="105" x2="280" y2="105" stroke="#334155"/>'+pl('sp',ms,'#f43f5e')+pl('lag',ml,'#22d3ee')+'<line x1="'+X(S.v)+'" y1="10" x2="'+X(S.v)+'" y2="105" stroke="#fbbf24" stroke-dasharray="3 3"/><line x1="'+X(b.v)+'" y1="10" x2="'+X(b.v)+'" y2="105" stroke="#4ade80" stroke-dasharray="1 3"/><text x="14" y="120" fill="#8b9bb8" font-size="9">0</text><text x="248" y="120" fill="#8b9bb8" font-size="9">30 cm/s</text></svg>';
+ $('vpt').innerHTML='More airflow reaches detectors sooner but feeds faster flame spread. At '+S.v+' cm/s: spread <b class="mono">'+r.sp.toFixed(2)+'x</b>, detection lag <b class="mono">'+r.lag.toLocaleString()+' ms</b>. With fans off: spread '+z.sp.toFixed(2)+'x, lag '+z.lag.toLocaleString()+' ms, and cool-flame risk '+z.cf+'%. Balanced setpoint: about <b class="mono">'+b.v+' cm/s</b>.'}
+const C={LOW:'#4ade80',MODERATE:'#fbbf24',CRITICAL:'#f43f5e'};
+function opts(id,title,arr,get,set,eq){const el=$(id);el.innerHTML='<div class="text-cyan-300 text-sm font-semibold mb-1">'+title+'</div>';arr.forEach(([k,o])=>{const b=document.createElement('button');b.className='opt w-full text-left bg-[#0a1020] border border-slate-800 rounded px-3 py-2 mb-1.5 hover:border-slate-600';b.setAttribute('aria-pressed',eq(k));b.innerHTML=o.t+'<span class="block text-xs text-slate-400">'+o.s+'</span>';b.onclick=()=>{set(k);render()};el.appendChild(b)})}
+const meter=(l,v,pct,c)=>'<div><div class="flex justify-between text-sm"><span class="text-slate-400">'+l+'</span><b class="mono" style="color:'+c+'">'+v+'</b></div><div class="bar h-2 bg-slate-800 rounded"><i class="rounded" style="width:'+Math.min(100,pct)+'%;background:'+c+'"></i></div></div>';
+function render(){
+ opts('cg','Gravity level',GR.map((o,i)=>[i,o]),0,i=>S.g=GR[i].v,i=>GR[i].v===S.g);
+ opts('cf','Material / fuel',Object.entries(FU),0,k=>S.f=k,k=>k===S.f);
+ opts('ca','Atmosphere',AT.map((o,i)=>[i,o]),0,i=>S.a=i,i=>i===S.a);
+ $('vl').textContent=S.v;$('vv').value=S.v;
+ const r=calc(),c=C[r.lv];
+ $('hi').textContent=r.hi.toFixed(0)+'%';$('rc').style.stroke=c;$('rc').style.strokeDashoffset=390*(1-r.hi/100);
+ $('lv').textContent=r.lv+' HAZARD';$('lv').style.color=c;
+ $('lt').textContent=r.F.t+' | '+GR.find(g=>g.v===S.g).t+' | '+r.A.t+' | effective O\u2082 '+r.eff.toFixed(1)+'%';
+ $('mt').innerHTML=meter('Flame spread multiplier',r.sp.toFixed(2)+'\u00d7',r.sp/2*100,r.sp>1.2?'#f43f5e':r.sp>.6?'#fbbf24':'#22d3ee')+meter('Smoke detection lag',r.lag.toLocaleString()+' ms',r.lag/60000*100,r.lag>20000?'#f43f5e':r.lag>8000?'#fbbf24':'#22d3ee');
+ drawData();extra(r);
+}
+$('vv').oninput=e=>{S.v=+e.target.value;render()};
+/* telemetry */
+let alarm=false;
+function tele(){const r=calc(),A=r.A,j=n=>(Math.random()-.5)*n;
+ const t=[['Cabin pressure',(A.p+j(.2)).toFixed(1)+' kPa','#22d3ee'],['O\u2082 concentration',(A.o+j(.1)).toFixed(1)+' %',A.o>25?'#fbbf24':'#22d3ee'],['CO\u2082 partial pressure',(.4+j(.05)).toFixed(2)+' kPa','#22d3ee'],['Smoke detectors',alarm?'ALARM':'NOMINAL, 4/4 armed',alarm?'#f43f5e':'#4ade80']];
+ $('tele').innerHTML=t.map(a=>'<div class="bg-[#0b1224] border border-slate-800 rounded-lg px-4 py-3"><div class="text-xs text-slate-400">'+a[0]+' <span class="text-slate-600">(simulated)</span></div><div class="mono text-xl font-semibold '+(a[1]==='ALARM'?'animate-pulse':'')+'" style="color:'+a[2]+'">'+a[1]+'</div></div>').join('')}
+setInterval(tele,1000);
+let simT;$('sim').onclick=()=>{clearInterval(simT);alarm=false;const lag=calc().lag,k=lag/4000,t0=Date.now();
+ simT=setInterval(()=>{const e=Math.min(lag,(Date.now()-t0)*k);$('se').textContent=Math.round(e).toLocaleString()+' / '+lag.toLocaleString()+' ms';$('sb').style.width=e/lag*100+'%';if(e>=lag){clearInterval(simT);alarm=true;$('sb').style.background='#f43f5e'}tele()},50);$('sb').style.background='#fbbf24'};
+/* dataset */
+const P=['All','FLEX','CFI','BASS','SPICE','SAME','Saffire','ACME','Related'];const HW={FLEX:'FLEX / FLEX-2, MDCA in CIR',CFI:'Cool Flames Investigation, MDCA in CIR',BASS:'BASS / BASS-II, MSG flow duct',SPICE:'SPICE, MSG flow duct',SAME:'Uncrewed Cygnus vehicle',Saffire:'Saffire-I to VI, uncrewed Cygnus',ACME:'ACME E-FIELD, CIR',Related:'Ground and engineering literature'};let pf='All';
+const D=[
+{p:'FLEX',t:'Spherical blue diffusion flames',s:'Fuel droplets burned in microgravity form near-spherical, dim blue flames sustained by slow diffusion instead of buoyant convection.',w:'There is no rising plume to carry heat or smoke to ceiling detectors, and flames can be hard to see.',e:'Do not rely on visual detection or ceiling placement. Use return-air and multi-criteria sensing.'},
+{p:'FLEX',t:'Cool flames after visible extinction',s:'Some fuels kept burning in a faint low-temperature mode after the hot flame went out, with little soot and weak light.',w:'A fire may appear out while still consuming fuel and able to re-ignite.',e:'Hold suppression and monitoring beyond visible flame-out; confirm with temperature and gas sensing.'},
+{p:'FLEX',t:'Diluent effectiveness (CO\u2082 vs N\u2082)',s:'Extinguishment tests with diluent gases found CO\u2082 more effective than nitrogen at removing flames, consistent with its higher heat capacity.',w:'Agent choice sets the concentration crew must tolerate in a sealed module.',e:'CO\u2082 works at lower demand than N\u2082 but at crew-hazardous concentrations; plan masks and venting.'},
+{p:'BASS',t:'Solids burn at lower oxygen in slow flow',s:'Samples of solid fuel in controlled low-speed flow showed flammability boundaries shifting toward lower oxygen levels than normal-gravity tests suggest.',w:'Earth-based material flammability ratings can be non-conservative for orbit.',e:'Qualify materials in a microgravity-relevant flow range, not only with standard Earth tests.'},
+{p:'BASS',t:'Flame spread depends on flow speed',s:'Flame spread over solids varied non-monotonically with airflow: very low flow weakens or quenches flames, moderate flow can strengthen them.',w:'Cabin fans change fire behavior; shutting them off is not automatically safe or unsafe.',e:'Choose the ventilation protocol with the model: compare spread and detection lag at each flow speed.'},
+{p:'SAME',t:'Smoke particle size from overheated materials',s:'Smoke from overheated spacecraft materials was characterized aboard a cargo vehicle to compare particle size with ground tests.',w:'Detectors are tuned to particle sizes, and mismatches can delay alarms.',e:'Calibrate and validate detectors with microgravity smoke data and consider multiple sensing methods.'},
+{p:'SAME',t:'Smoke transport without buoyancy',s:'With no buoyant lift, smoke spreads by ventilation flow and slow diffusion rather than rising.',w:'Detection delay grows when smoke is not drawn toward the sensor.',e:'Place detectors in ventilation return paths and keep airflow paths known.'},
+{p:'Saffire',t:'Meter-scale spacecraft fires',s:'Saffire experiments ignited large material samples in an uncrewed cargo vehicle to study fire growth at spacecraft scale.',w:'Small lab results may not predict real flame growth and heat output.',e:'Include scale effects when sizing suppression and hazard zones.'},
+{p:'Saffire',t:'Post-fire atmosphere and cleanup',s:'Saffire runs measured combustion gases and the vehicle atmosphere after burns.',w:'Combustion products can matter as much as the flame for crew safety.',e:'Plan post-fire air monitoring and recovery procedures, not just suppression.'},
+{p:'CFI',t:'Cool flames of burning droplets',s:'The Cool Flames Investigation studied low-temperature cool-flame burning of fuel droplets, which gives off little light and can persist after the hot flame ends.',w:'Invisible burning can sustain heat release and re-ignite fuel vapor.',e:'Pair visual flame detection with temperature and gas sensing and hold monitoring after flame-out.'},
+{p:'SPICE',t:'Ignition and extinction of solids in flow',s:'SPICE explored ignition and extinction limits of solid fuel samples in flowing gas in the glovebox flow duct.',w:'Shows how airflow speed and oxygen jointly set whether a flame persists.',e:'Use limits in terms of both oxygen fraction and flow speed when defining safe ventilation.'},
+{p:'ACME',t:'Electric fields and flame ions (E-FIELD)',s:'E-FIELD flames use applied electric fields to act on charged species in flames, offering a way to shape or sense flames where buoyancy is absent.',w:'Gives researchers a way to probe flame behavior beyond 0 g and 1 g and supports partial-gravity bridging.',e:'Treat as research support for model bounds, not a ready suppression method.'},
+{p:'Related',t:'Thermal runaway versus flame suppression',s:'Fire safety work on lithium-ion cells notes a cell in runaway can heat neighbors and vent flammable gas independent of ambient oxygen.',w:'Agents that stop flames do not stop cell heating.',e:'Combine cooling, isolation, and containment; expect re-ignition.'}];
+function drawData(){$('pf').innerHTML=P.map(p=>'<button class="px-3 py-1 rounded-full border text-sm '+(p===pf?'border-cyan-400 text-cyan-300 bg-cyan-950':'border-slate-700 text-slate-400')+'" data-p="'+p+'">'+p+'</button>').join('');
+ $('pf').querySelectorAll('button').forEach(b=>b.onclick=()=>{pf=b.dataset.p;drawData()});
+ const L=D.map((d,i)=>[d,i]).filter(([d])=>pf==='All'||d.p===pf);$('dn').textContent='('+L.length+')';
+ $('dg').innerHTML=L.map(([d,i])=>'<button data-i="'+i+'" class="text-left bg-[#0a1020] border border-slate-800 border-l-4 border-l-amber-400 rounded-lg p-3 hover:border-cyan-400 transition"><span class="text-xs text-amber-300 mono">'+d.p+' | '+(d.h||HW[d.p])+'</span><span class="dsp text-lg text-white block">'+d.t+'</span><span class="text-sm text-slate-400 block">'+d.s.slice(0,95)+'…</span></button>').join('');
+ $('dg').querySelectorAll('button').forEach(b=>b.onclick=()=>open(+b.dataset.i))}
+function open(i){const d=D[i],r=calc(),z=calc({v:0});
+ $('mb').innerHTML='<div class="flex justify-between"><span class="mono text-amber-300">'+d.p+' | '+(d.h||HW[d.p])+'</span><button id="mx" class="text-slate-400 hover:text-white" aria-label="Close">Close</button></div><h3 class="dsp text-3xl text-white mb-2">'+d.t+'</h3><h4 class="text-cyan-300 font-semibold">What was observed</h4><p>'+d.s+'</p><h4 class="text-cyan-300 font-semibold mt-3">Why it matters for spacecraft safety</h4><p>'+d.w+'</p><h4 class="text-cyan-300 font-semibold mt-3">Engineering takeaway</h4><p>'+d.e+'</p><h4 class="text-cyan-300 font-semibold mt-3">Applied to your scenario</h4><p class="mono text-sm">'+r.F.t+' / '+r.A.t+': hazard '+r.hi.toFixed(0)+'% ('+r.lv+'); detection lag '+r.lag.toLocaleString()+' ms at '+S.v+' cm/s vs '+z.lag.toLocaleString()+' ms with ventilation off.</p><p class="text-xs text-slate-500 mt-3">Summary paraphrased from published NASA research themes. Verify details against the original publications.</p>';
+ $('md').classList.remove('hidden');$('mx').focus();$('mx').onclick=()=>$('md').classList.add('hidden')}
+$('md').onclick=e=>{if(e.target.id==='md')$('md').classList.add('hidden')};document.onkeydown=e=>{if(e.key==='Escape')$('md').classList.add('hidden')};
+/* briefing */
+const li=s=>'<li>'+s+'</li>';
+function brief(q){const r=calc(),f=S.f,hiO=r.eff>25,micro=S.g===0;
+ const vt=[0,5,15,30].map(v=>{const c=calc({v});return'v='+v+' cm/s: spread '+c.sp.toFixed(2)+'\u00d7, detection '+c.lag.toLocaleString()+' ms'}).map(li).join('');
+ const ag={wire:['De-energize the affected bus at the breaker first (target: before any agent discharge).','CO\u2082 portable extinguisher through the rack access port. Effective, but crew must mask because suppression concentrations are hazardous.','Novec 1230 (FK-5-1-12) works at much lower concentrations than CO\u2082 and is safer for crew, but decomposition in a fire can produce HF, so isolate and ventilate afterward.'],
+ poly:['CO\u2082 or water mist on surface flames after shutting off local fans.','Novec 1230 for enclosed volumes, with HF byproduct precautions.'],
+ fab:['Water mist or CO\u2082 for suit fabric; remove the ignition source and oxygen supply path.','Avoid gaseous agent in an occupied suit-up area unless crew is masked.'],
+ li:['Water mist or heavy cooling is the primary response. CO\u2082 or Novec 1230 may knock down flames but will not stop cell heating.','Contain the unit in a fire-resistant bag or locker and keep it isolated.','Expect re-ignition: continue cooling and monitor temperature.']}[f];
+ const O=[ ['SITUATION',[q?'<span class="text-amber-300">Query: '+q.replace(/[<>&]/g,'')+'</span>':'Automated analysis of the current scenario.',r.F.t+' | '+GR.find(g=>g.v===S.g).t+' | '+r.A.t+' | ventilation '+S.v+' cm/s.']],
+ ['HAZARD ASSESSMENT',['Ignition Hazard Index <b style="color:'+C[r.lv]+'">'+r.hi.toFixed(0)+'% ('+r.lv+')</b>; flame spread multiplier '+r.sp.toFixed(2)+'\u00d7 vs Earth air reference.',micro?'Flames are spherical and dim at 0 g; solids can sustain burning at lower oxygen than Earth tests predict.':'Partial gravity restores some buoyant flow, so flames and smoke move more like on Earth.',hiO?'<span class="text-red-400">Enriched oxygen (effective '+r.eff.toFixed(1)+'%) raises ignition probability and spread sharply. Keep combustibles and ignition sources out.</span>':'Atmosphere is near the Earth reference.']],
+ ['DETECTION LAG WARNING',['Estimated smoke transit to a detector 1.5 m away: <b>'+r.lag.toLocaleString()+' ms</b>.',r.lag>20000?'<span class="text-red-400">Lag is long. Add detectors in return airflow and use multi-criteria sensing.</span>':r.lag>8000?'Lag is moderate; verify detector placement.':'Lag is short with current ventilation.']],
+ ['COOL FLAME & PYROLYSIS WARNING',['Cool flame risk <b style="color:'+(r.cf<35?'#4ade80':r.cf<65?'#fbbf24':'#f43f5e')+'">'+r.cf+'%</b>; pyrolysis gas load index '+r.pyro+'%.','FLEX and CFI (MDCA in the CIR) showed low-temperature burning can continue after visible extinction. Do not treat flame-out as all-clear; hold monitoring for at least '+r.hold+' min.']],
+ ['EVIDENCE BASIS',[EV[f],'Partial gravity: direct 0.16 g and 0.38 g combustion data are limited in the PSI database, so this model bounds results between 0 g and 1 g.']],
+ ['RECOMMENDED SUPPRESSION',[...ag.map(li).join('')?['<ul class="list-disc pl-5">'+ag.map(li).join('')+'</ul>']:[],hiO?'In enriched air, agent demand rises. Favor early de-energizing and dilution toward 23% O\u2082 or less where the volume can be sealed and crew protected.':'Standard air: use the least toxic agent compatible with the fuel.','CO\u2082 vs Novec 1230: CO\u2082 is available and effective but toxic at extinguishing levels; Novec 1230 is more crew-tolerant but needs HF handling.']],
+ ['VENTILATION OVERRIDE PROTOCOL',['Model trade-off (spread vs detection):<ul class="list-disc pl-5">'+vt+'</ul>','Balanced setpoint (spread and detection lag together): about '+bal().v+' cm/s.',micro?'Recommendation: stop forced ventilation in the affected module after alarm to cut flame spread, while keeping return paths monitored. Restore only after extinguishment is confirmed by temperature and gas sensing, since cool flames can persist invisibly.':'Recommendation: isolate the module and cut fans after alarm; buoyancy still moves smoke upward.']],
+ ['MITIGATION STEPS',['<ol class="list-decimal pl-5">'+['Sound alarm, notify crew, don breathing protection.',f==='wire'?'Cut power to the affected circuit.':f==='li'?'Disconnect charging and isolate the pack.':'Remove the ignition source.','Apply the primary agent from the list above.','Apply the ventilation protocol.','Hold and monitor temperature and CO for at least '+r.hold+' min after visible flame-out (cool flames and pyrolysis can persist).','Perform post-fire atmosphere checks before restoring normal operations.'].map(li).join('')+'</ol>']],
+ ['CAVEATS',['Heuristic model for demonstration. Confirm against NASA flight rules and test data.']]];
+ if(q){const t=q.toLowerCase();const k=/novec|co2|co\u2082|agent|suppress/.test(t)?5:/vent|fan|airflow/.test(t)?6:/detect|smoke|alarm/.test(t)?2:-1;if(k>0){const[x]=O.splice(k,1);O.splice(1,0,x)}}
+ return O}
+function ask(q){const t=q.toLowerCase();
+ if(/lunar|moon/.test(t))S.g=.16;else if(/mars|martian/.test(t))S.g=.38;else if(/iss|micrograv|0 ?g|freefall/.test(t))S.g=0;
+ if(/batter|lithium|li-?ion/.test(t))S.f='li';else if(/wir|electric|short|avionic|cable/.test(t))S.f='wire';else if(/suit|fabric|nomex/.test(t))S.f='fab';else if(/polymer|panel|plastic/.test(t))S.f='poly';
+ if(/35 ?%|high.?pressure/.test(t))S.a=2;else if(/30 ?%|airlock|enrich|high.?oxygen|artemis|rover|10\.2/.test(t))S.a=1;else if(/21 ?%|standard air/.test(t))S.a=0;
+ render();return brief(q)}
+let tm,B=brief();
+function show(O){clearTimeout(tm);B=O;const o=$('out');o.innerHTML='';const fr=[];O.forEach(s=>{fr.push('<h4>'+s[0]+'</h4>');s[1].forEach(x=>fr.push('<div class="mb-1">'+x+'</div>'))});let i=0;(function n(){if(i<fr.length){o.insertAdjacentHTML('beforeend',fr[i++]);o.scrollTop=o.scrollHeight;tm=setTimeout(n,matchMedia('(prefers-reduced-motion:reduce)').matches?0:80)}})()}
+$('run').onclick=()=>show(brief());$('qs').onclick=()=>{const q=$('qi').value.trim();if(!q){$('qi').focus();return}show(ask(q))};$('qi').onkeydown=e=>{if(e.key==='Enter')$('qs').click()};
+['What is the best fire suppression agent for an electrical short in a 30% oxygen lunar habitat?','Should we shut off ventilation during a battery fire on the ISS?','Novec 1230 or CO2 for a Martian airlock suit fabric fire?'].forEach(q=>{const b=document.createElement('button');b.className='text-xs px-3 py-1 rounded-full border border-slate-700 text-slate-400 hover:text-cyan-300 hover:border-cyan-400';b.textContent=q;b.onclick=()=>{$('qi').value=q;$('qs').click()};$('ch').appendChild(b)});
+$('pm').onclick=()=>{document.body.classList.toggle('pres');$('pm').textContent=document.body.classList.contains('pres')?'Exit presentation mode':'Presentation mode'};
+function buildSheet(){const r=calc();$('sheet').innerHTML='<h1>MEMO: AeroFlame-X Fire Hazard Assessment</h1><p>Flame in Freefall, NASA Space Apps 2026. Generated '+new Date().toLocaleString()+'</p><h2>Scenario</h2><table><tr><th>Gravity</th><td>'+GR.find(g=>g.v===S.g).t+'</td><th>Fuel</th><td>'+r.F.t+'</td></tr><tr><th>Atmosphere</th><td>'+r.A.t+' ('+r.A.s+')</td><th>Ventilation</th><td>'+S.v+' cm/s</td></tr></table><h2>Computed results</h2><table><tr><th>Ignition Hazard Index</th><td>'+r.hi.toFixed(0)+'% ('+r.lv+')</td><th>Flame spread multiplier</th><td>'+r.sp.toFixed(2)+'\u00d7</td><th>Detection lag</th><td>'+r.lag.toLocaleString()+' ms</td></tr></table><h2>Model assumptions</h2><p>Effective O\u2082 = x\u00b7(0.7+0.3\u00b7P/101.3). Hazard = logistic of (effective O\u2082 minus fuel limiting oxygen, shifted down up to 3.5 points at 0 g); Li-ion uses a linear thermal-runaway term. Spread \u221d (O\u2082eff/21)^2.2 \u00b7 \u221a(u/30) \u00b7 u/(u+2) \u00b7 fuel factor, with u from buoyant and forced flow. Detection lag = 1.5 m / smoke speed + 800 ms. Educational heuristics, not validated flight values.</p><h2>Engineering brief</h2>'+B.map(s=>'<h2>'+s[0]+'</h2>'+s[1].map(x=>'<div>'+x+'</div>').join('')).join('')+'<h2>Library references</h2><ul>'+D.map(d=>'<li>'+d.p+': '+d.t+'</li>').join('')+'</ul>';}
+function plain(h){const d=document.createElement('div');d.innerHTML=h.replace(/<li>/g,'<div>- ').replace(/<\/(div|li|p|h4|tr)>/g,'$&\n');return d.textContent}
+const clean=t=>String(t).replace(/\$([^$]*)\$/g,'$1').replace(/\\(?:text|mathrm|mathbf|rm)\{([^}]*)\}/g,'$1').replace(/\\times|\\cdot/g,'x').replace(/\\propto/g,'~').replace(/\\sqrt\{([^}]*)\}/g,'sqrt($1)').replace(/\\[,;! ]/g,' ').replace(/([A-Za-z])_\{?(\d+)\}?/g,'$1$2').replace(/\^\{?([-\d.]+)\}?/g,'^$1').replace(/(\d)~+(?=[A-Za-z])/g,'$1 ').replace(/~/g,' ').replace(/\\([A-Za-z]+)/g,'$1');
+const ASC=t=>clean(t).replace(/\u2082/g,'2').replace(/\u00d7/g,'x').replace(/[\u00b7\u221d]/g,'*').replace(/[\u2013\u2014]/g,'-').replace(/\u2026/g,'...').replace(/[^\x00-\x7F]/g,'').replace(/[$\\{}]/g,'');
+function makePDF(){
+ const doc=new window.jspdf.jsPDF({unit:'pt',format:'letter'}),r=calc(),W=doc.internal.pageSize.getWidth()-100,H=doc.internal.pageSize.getHeight()-50;let y=56;
+ const line=(t,sz,b,c)=>{doc.setFont('helvetica',b?'bold':'normal');doc.setFontSize(sz);doc.setTextColor(...(c||[20,20,20]));doc.splitTextToSize(ASC(t),W).forEach(l=>{if(y>H){doc.addPage();y=56}doc.text(l,50,y);y+=sz*1.4})};
+ const hd=t=>{y+=8;line(t,12,1,[0,100,130])};
+ line('EXECUTIVE ENGINEERING MEMO',17,1);line('SUBJECT: AeroFlame-X microgravity fire hazard assessment',11,1);line('TO: Habitat design and mission safety review   FROM: AeroFlame-X decision-support tool',9,0,[90,90,90]);
+ line('Flame in Freefall, NASA Space Apps 2026. Generated '+new Date().toLocaleString(),9,0,[90,90,90]);
+ hd('Scenario');
+ line('Gravity: '+GR.find(g=>g.v===S.g).t+'   |   Fuel: '+r.F.t,10);
+ line('Atmosphere: '+r.A.t+' ('+r.A.s+')   |   Ventilation: '+S.v+' cm/s',10);
+ hd('Computed results');
+ line('Ignition Hazard Index: '+r.hi.toFixed(0)+'% ('+r.lv+')',10,1);
+ line('Flame spread multiplier: '+r.sp.toFixed(2)+'x vs Earth-air reference',10);
+ line('Smoke detection lag (1.5 m): '+r.lag.toLocaleString()+' ms',10);
+ line('Cool flame and pyrolysis warning: '+(r.cf<35?'LOW':r.cf<65?'ELEVATED':'HIGH')+' ('+r.cf+'%), pyrolysis index '+r.pyro+'%, minimum post-flame-out monitoring '+r.hold+' min',10,1);
+ hd('Hardware and data context');
+ line('FLEX / FLEX-2 / CFI: MDCA in the CIR. BASS / BASS-II / SPICE: Microgravity Science Glovebox with fan-driven flow ducts. Saffire-I to VI: uncrewed Cygnus large-scale burns.',9);
+ line('While NASA targets Artemis lunar bases (0.16g) and Martian habitats (0.38g), direct partial-gravity combustion data is limited in the PSI database. Researchers bridge this gap using 0g/1g bounding and electric-field (ACME E-FIELD) ion dynamics.',9);
+ line(EV[S.f],9);
+ hd('Model assumptions');
+ line('Effective O2 = x*(0.7+0.3*P/101.3). Hazard = logistic of (effective O2 minus fuel limiting oxygen, shifted down up to 3.5 points at 0 g); Li-ion uses a linear thermal-runaway term. Spread ~ (O2eff/21)^2.2 * sqrt(u/30) * u/(u+2) * fuel factor, with u from buoyant and forced flow. Detection lag = 1.5 m / smoke speed + 800 ms. Educational heuristics, not validated flight values.',9);
+ B.forEach(s=>{hd(s[0]);s[1].forEach(x=>plain(x).split('\n').map(t=>t.trim()).filter(Boolean).forEach(t=>line(t,10)))});
+ hd('Library references');
+ D.forEach(d=>line('- '+d.p+': '+d.t,9));
+ return doc.output('blob')}
+$('ex').onclick=async()=>{const b=$('ex'),old='Export PDF report',say=t=>{b.textContent=t;setTimeout(()=>b.textContent=old,3500)};
+ try{
+  if(!window.jspdf)throw 0;
+  const blob=makePDF(),dl=window.claude?await window.claude.use('downloads'):null;
+  if(!dl)throw 0;
+  await dl.save({filename:'AeroFlame-X-hazard-memo.pdf',data:blob});say('PDF saved');
+ }catch(e){
+  if(e&&e.code==='declined'){say('Save cancelled');return}
+  buildSheet();$('sheet').innerHTML=clean($('sheet').innerHTML);say('Opening print dialog...');setTimeout(()=>{try{window.print()}catch(_){}},60)}};
+render();tele();
+</script></body></html>
