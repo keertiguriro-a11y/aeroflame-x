@@ -29,6 +29,14 @@ body.pres{font-size:1.2em}html:has(body.pres){font-size:125%}
  <div class="flex gap-2 flex-wrap"><button id="pm" class="border border-slate-700 hover:border-cyan-400 hover:text-cyan-300 rounded px-4 py-2">Presentation mode</button><button id="ex" class="border border-amber-400 text-amber-300 hover:bg-amber-400 hover:text-slate-900 rounded px-4 py-2">Export PDF report</button></div>
 </header>
 
+<section aria-label="Live flame and smoke simulator" class="bg-[#0b1224] border border-slate-800 rounded-xl p-4 mb-4">
+ <div class="flex flex-wrap items-center justify-between gap-2 mb-3"><h2 class="dsp text-xl text-white">Live Microgravity Flame &amp; Smoke Telemetry Simulator</h2><div class="flex flex-wrap gap-2" id="spre"></div></div>
+ <canvas id="simcv" class="w-full rounded-lg border border-slate-800 bg-slate-950" style="aspect-ratio:900/460" role="img" aria-label="Animated spacecraft cabin cross-section showing flame, smoke and ceiling smoke detector"></canvas>
+ <div id="shud" class="grid grid-cols-2 gap-2 mt-3 sm:hidden"></div>
+ <div class="flex flex-wrap items-center gap-4 mt-3"><button id="trig" class="bg-red-500/90 hover:bg-red-400 text-white rounded px-4 py-2 font-semibold">Trigger Fire Event</button>
+ <label class="flex-1 min-w-[240px] text-sm text-cyan-300 font-semibold">Airflow velocity: <span id="afl" class="mono">0.10</span> m/s<input id="afs" type="range" min="0" max="50" value="10" class="w-full accent-cyan-400"></label></div>
+ <p class="text-xs text-slate-500 mt-2">Educational heuristic simulation tied to the scenario selectors below. Smoke timing uses the same transport model as the hazard calculator; the flame front is drawn at an exaggerated scale.</p>
+</section>
 <section aria-label="Live telemetry" class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4" id="tele"></section>
 
 <div class="grid lg:grid-cols-[310px_1fr] gap-4">
@@ -223,4 +231,60 @@ $('ex').onclick=async()=>{const b=$('ex'),old='Export PDF report',say=t=>{b.text
   if(e&&e.code==='declined'){say('Save cancelled');return}
   buildSheet();$('sheet').innerHTML=clean($('sheet').innerHTML);say('Opening print dialog...');setTimeout(()=>{try{window.print()}catch(_){}},60)}};
 render();tele();
+(function(){
+const cv=$('simcv'),cx=cv.getContext('2d'),VW=900,VH=460,TC=6,L=1.5,RACK=370,IGN={x:190,y:322},DET={x:640,y:62};
+const D0=Math.hypot(DET.x-IGN.x,DET.y-IGN.y),PX=D0/L,ux=(DET.x-IGN.x)/D0,uy=(DET.y-IGN.y)/D0,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+let fire=false,cool=false,flow=.1,t=0,front=0,fpx=0,det=false,dly=0,P=[],acc=0,pre=0,last=performance.now(),hudT=0;
+function fit(){const d=Math.min(window.devicePixelRatio||1,2),w=cv.clientWidth||900;cv.width=Math.round(w*d);cv.height=Math.round(w*VH/VW*d)}
+window.addEventListener('resize',fit);fit();
+function M(){const A=AT[S.a],eff=A.o*(.7+.3*A.p/101.3),g=S.g;let us=Math.hypot(.15*Math.sqrt(g),flow,.02);if(cool)us*=.6;
+ const u=Math.max(1,Math.hypot(30*Math.sqrt(g),flow*100)),q=u/(u+2);let rate=1.2*Math.pow(eff/21,2.2)*Math.sqrt(u/30)*(q/(30/32));if(cool)rate*=.12;
+ const T=cool?700+25*Math.sin(t):1250+30*(eff-21)+240*flow,eta=fire?(det?0:Math.max(0,(L-front)/us)+Math.max(0,.8-dly)):L/us+.8;
+ return{A,eff,g,us,rate,T,eta}}
+function act(m){if(!fire)return 'Standby: monitor wire temperature and current';if(cool)return 'Cut power; thermal + CO sensing; hold 15+ min (no visible flame)';
+ if(m.eff>=26||flow>.25)return 'Cut Ventilation + Deploy CO\u2082 / Water Mist';if(m.eta>10&&!det)return 'De-energize circuit; manual alert; targeted CO\u2082 / Water Mist';return 'De-energize circuit; deploy CO\u2082 / Water Mist'}
+function reset(){fire=false;t=0;front=0;fpx=0;det=false;dly=0;P=[];alarm=false;$('trig').textContent='Trigger Fire Event'}
+function step(dt){const m=M(),sd=dt*TC;if(!fire)return;t+=sd;fpx=Math.min(RACK,fpx+m.rate*sd*3);
+ acc+=(cool?4:16+Math.max(0,m.eff-21)*1.2)*dt;while(acc>=1){acc--;P.push({d:0,off:0,vp:.45+.55*Math.random(),a:1,r:2+Math.random()*2.5})}
+ if(P.length>260)P.splice(0,P.length-260);
+ P.forEach(p=>{p.d+=m.us*p.vp*sd;p.off+=(Math.random()-.5)*16*Math.sqrt(dt)*(1+p.d*1.5);if(p.d>L+.25)p.a-=dt*1.2});P=P.filter(p=>p.a>0);
+ if(!det){front+=m.us*sd;if(front>=L){dly+=sd;if(dly>=.8){det=true;alarm=true}}}}
+const glow=(x,y,r,c,a)=>{const g=cx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,'rgba('+c+','+a+')');g.addColorStop(1,'rgba('+c+',0)');cx.fillStyle=g;cx.beginPath();cx.arc(x,y,r,0,7);cx.fill()};
+const tx=(s,x,y,c,f,al)=>{cx.fillStyle=c;cx.font=f||'13px ui-monospace,Menlo,Consolas,monospace';cx.textAlign=al||'left';cx.fillText(s,x,y)};
+function draw(ts){const m=M(),k=clamp((m.eff-21)/14,0,1),mid=Math.round(56+k*195)+','+Math.round(189-k*43)+','+Math.round(248-k*188),hud=cv.clientWidth>=640;
+ cx.setTransform(cv.width/VW,0,0,cv.width/VW,0,0);cx.clearRect(0,0,VW,VH);
+ let g=cx.createLinearGradient(0,0,0,VH);g.addColorStop(0,'#0b1730');g.addColorStop(1,'#030814');cx.fillStyle=g;cx.fillRect(0,0,VW,VH);
+ cx.strokeStyle='#27406b';cx.lineWidth=3;cx.beginPath();cx.roundRect(20,36,860,354,24);cx.stroke();
+ cx.strokeStyle='#14233f';cx.lineWidth=1;for(let x=60;x<880;x+=60){cx.beginPath();cx.moveTo(x,36);cx.lineTo(x,390);cx.stroke()}
+ cx.fillStyle='#111c33';cx.fillRect(700,200,160,190);cx.fillRect(34,230,100,160);tx('STOWAGE RACK',710,222,'#556a8f','11px sans-serif');tx('AVIONICS RACK',42,252,'#556a8f','11px sans-serif');
+ cx.fillStyle='#1d2b4a';cx.fillRect(560,38,60,8);tx('RETURN VENT',560,30,'#556a8f','10px sans-serif');cx.fillRect(110,38,60,8);tx('SUPPLY VENT',108,30,'#556a8f','10px sans-serif');
+ if(flow>0){cx.save();cx.setLineDash([8,10]);cx.lineDashOffset=-ts*flow*500;cx.strokeStyle='rgba(34,211,238,'+(.12+flow*.6)+')';cx.lineWidth=1+flow*8;cx.beginPath();cx.moveTo(140,46);cx.quadraticCurveTo(150,230,IGN.x-20,IGN.y-30);cx.lineTo(DET.x-30,DET.y+6);cx.lineTo(590,46);cx.stroke();cx.restore()}
+ cx.fillStyle='#334155';cx.fillRect(IGN.x,338,RACK,10);cx.fillStyle='#0f172a';cx.fillRect(IGN.x,338,fpx,10);tx('POLYMER RACK PANEL (flammable)',IGN.x+RACK/2,366,'#8b9bb8','11px sans-serif','center');
+ cx.strokeStyle='#64748b';cx.lineWidth=3;cx.beginPath();cx.moveTo(134,300);cx.quadraticCurveTo(160,330,IGN.x,IGN.y);cx.stroke();
+ const hot=fire?1:.5+.5*Math.sin(ts*3);glow(IGN.x,IGN.y,22,'251,146,60',.35+.4*hot);tx('Overheating wire',IGN.x-30,IGN.y+34,'#fbbf24','11px sans-serif');
+ if(!fire)for(let i=0;i<3;i++){const ph=(ts*.5+i/3)%1;glow(IGN.x+Math.sin(ts+i*2)*8,IGN.y-ph*60,8+ph*8,'148,163,184',.18*(1-ph))}
+ P.forEach(p=>{const x=IGN.x+ux*p.d*PX-uy*p.off,y=IGN.y+uy*p.d*PX+ux*p.off;glow(x,y,p.r*(3+Math.min(5,p.d*4)),'203,213,225',.2*clamp(p.a,0,1))});
+ cx.beginPath();cx.arc(DET.x,DET.y,12,0,7);cx.fillStyle='#1e293b';cx.fill();cx.strokeStyle='#475569';cx.lineWidth=2;cx.stroke();
+ glow(DET.x,DET.y,det?26:9,det?'244,63,94':'74,222,128',det?.6+.3*Math.sin(ts*12):.8);tx('SMOKE DETECTOR',DET.x-44,DET.y+28,'#8b9bb8','10px sans-serif');
+ if(fire){const fx=IGN.x+fpx,r0=(12+(m.eff-21)*.9)*(.5+.5*Math.min(1,t/4)),st=1+flow/.5*1.8,vt=1+m.g/.38*.5,fy=IGN.y-r0*.4;
+  if(cool){glow(fx,fy,44,'167,139,250',.08+.04*Math.sin(ts*2))}else{cx.save();cx.translate(fx,fy);cx.scale(st,vt);glow(0,0,r0*2.2,mid,.3);glow(0,0,r0*1.3,mid,.8);glow(0,0,r0*.6,'255,255,255',.9);cx.restore();
+   for(let i=0;i<6;i++){const a=i*1.047+t*.35,rr=r0*(1.5+.4*Math.sin(t+i));glow(fx+Math.cos(a)*rr*st,fy+Math.sin(a)*rr*vt,4+(i%3)*2.5,mid,.9)}}}
+ const lag=fire&&!det&&m.eta>10;
+ if(fire){if(det){cx.fillStyle='rgba(244,63,94,.85)';cx.fillRect(150,44,400,26);tx('SMOKE DETECTED: ALARM',350,62,'#fff','bold 15px sans-serif','center')}
+  else if(lag&&Math.sin(ts*6)>-.3){cx.fillStyle='rgba(251,191,36,.9)';cx.fillRect(150,44,400,26);tx('DETECTION LAG WARNING: smoke stagnating',350,62,'#1c1300','bold 15px sans-serif','center')}
+  if(cool)tx('COOL FLAME: NO VISIBLE FLAME',350,92,'#c4b5fd','bold 14px sans-serif','center')}
+ tx(fire?'FIRE ACTIVE  T+'+t.toFixed(1)+' s':'STANDBY: wire overheating / pyrolysis',36,26,fire?'#f87171':'#4ade80','bold 13px ui-monospace,monospace');
+ if(hud){cx.fillStyle='rgba(2,6,23,.82)';cx.fillRect(668,48,212,122);cx.strokeStyle='#22d3ee';cx.lineWidth=1;cx.strokeRect(668,48,212,122);
+  [['FLAME TEMP',Math.round(m.T)+' K'],['SMOKE ETA',m.eta.toFixed(1)+' s'+(fire?'':' est.')],['SPREAD RATE',m.rate.toFixed(2)+' mm/s'],['O\u2082 / PRESSURE',m.A.o+'% / '+m.A.p+' kPa']].forEach((r,i)=>{tx(r[0],678,72+i*28,'#8b9bb8','11px ui-monospace,monospace');tx(r[1],872,72+i*28,i===1&&lag?'#fbbf24':'#22d3ee','bold 15px ui-monospace,monospace','right')})}
+ cx.fillStyle='rgba(2,6,23,.9)';cx.fillRect(20,398,860,50);cx.strokeStyle='#fbbf24';cx.strokeRect(20,398,860,50);
+ if(hud){tx('SUPPRESSION ACTION',34,418,'#fbbf24','11px ui-monospace,monospace');tx(act(m),34,438,'#fff','bold 16px sans-serif')}else tx('Suppression: see below',34,428,'#fbbf24','12px sans-serif');
+ hudT+=1;if(hudT%15===0)$('shud').innerHTML=[['Flame temp',Math.round(m.T)+' K'],['Smoke ETA',m.eta.toFixed(1)+' s'],['Spread rate',m.rate.toFixed(2)+' mm/s'],['Status',det?'ALARM':lag?'DETECTION LAG':fire?'FIRE':'STANDBY']].map(r=>'<div class="bg-slate-950 border border-slate-800 rounded p-2"><div class="text-xs text-slate-400">'+r[0]+'</div><div class="mono text-cyan-300">'+r[1]+'</div></div>').join('')+'<div class="col-span-2 bg-slate-950 border border-amber-400/40 rounded p-2 text-sm"><span class="text-xs text-amber-300">SUPPRESSION ACTION</span><br>'+act(m)+'</div>'}
+const PR=[['ISS Nominal (21% O\u2082)',{g:0,a:0,f:'wire',c:false,fl:.1}],['Artemis Lunar Habitat (30% O\u2082 / 10.2 psi, High Risk)',{g:.16,a:1,f:'wire',c:false,fl:.15}],['Cool-Flame Invisible Pyrolysis (FLEX Mode)',{g:0,a:0,f:'poly',c:true,fl:.08}]];
+function drawPre(){const el=$('spre');el.innerHTML='';PR.forEach(([n,p],i)=>{const b=document.createElement('button');b.className='opt bg-[#0a1020] border border-slate-800 rounded px-3 py-1.5 text-sm hover:border-slate-600';b.setAttribute('aria-pressed',i===pre);b.textContent=n;
+ b.onclick=()=>{pre=i;S.g=p.g;S.a=p.a;S.f=p.f;cool=p.c;flow=p.fl;$('afs').value=Math.round(flow*100);$('afl').textContent=flow.toFixed(2);S.v=Math.min(30,Math.round(flow*100));reset();render();drawPre()};el.appendChild(b)})}
+$('afs').oninput=e=>{flow=+e.target.value/100;$('afl').textContent=flow.toFixed(2);S.v=Math.min(30,Math.round(flow*100));render()};
+$('trig').onclick=()=>{if(fire){reset();return}reset();fire=true;$('trig').textContent='Reset simulation'};
+drawPre();
+(function f(now){const dt=Math.min(.05,(now-last)/1000);last=now;if(!document.hidden){step(dt);draw(now/1000)}requestAnimationFrame(f)})(last);
+})();
 </script></body></html>
